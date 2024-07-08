@@ -1,0 +1,88 @@
+package main
+
+import (
+	"encoding/csv"
+	"flag"
+	"fmt"
+	"os"
+	"strings"
+
+	"github.com/xuri/excelize/v2"
+)
+
+func main() {
+	flag.Parse()
+	dir := flag.Args()
+	if len(dir) == 0 {
+		fmt.Println(fmt.Sprintf("DirRequired"))
+		return
+	}
+	getExcelData(dir[0])
+}
+
+func getExcelData(dir string) {
+	f, err := excelize.OpenFile(dir)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	defer func() {
+		// Close the spreadsheet.
+		if err := f.Close(); err != nil {
+			fmt.Println(err)
+		}
+	}()
+	for _, name := range f.GetSheetMap() {
+		fmt.Println("SheetName: " + name)
+
+		isRow := true // 默认是行表
+		if strings.HasPrefix(name, "~") {
+			isRow = false
+		}
+
+		WriterCSV := csv.NewWriter(os.Stdout)
+
+		rows, err := f.Rows(name)
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+
+		rowCheck := isRow
+		rowNum := 0
+		for rows.Next() {
+			row, err := rows.Columns()
+			if err != nil {
+				fmt.Println(err)
+			}
+			if isRow {
+				if rowCheck {
+					rowCheck = false
+					for i, s := range row {
+						rowNum = i
+						if isEmpty(s) {
+							break
+						}
+					}
+				}
+			} else {
+				// 如果是列表，那么看一下第一个是否为none或者空
+				if len(row) == 0 || isEmpty(row[0]) {
+					continue
+				}
+			}
+			if rowNum > 0 {
+				row = row[:rowNum]
+			}
+			csverr := WriterCSV.Write(row)
+			if csverr != nil {
+				return
+			}
+		}
+	}
+}
+
+func isEmpty(s string) bool {
+	r := strings.Trim(s, " ")
+	return r == "" || r == "none"
+}
